@@ -1,0 +1,107 @@
+Table SoftwareCategory {
+  SoftwareCategoryID int [pk]
+  CategoryName varchar
+  Description text
+}
+
+Table EvaluationDomain {
+  EvaluationDomainID int [pk]
+  DomainName varchar
+  Description text
+}
+
+Table Vendor {
+  VendorID int [pk]
+  SoftwareCategoryID int [ref: > SoftwareCategory.SoftwareCategoryID]
+  VendorName varchar
+  Website varchar
+  Headquarters varchar
+  Description text
+}
+
+Table VendorCapability {
+  VendorCapabilityID int [pk]
+  VendorID int [ref: > Vendor.VendorID]
+  EvaluationDomainID int [ref: > EvaluationDomain.EvaluationDomainID]
+}
+
+Table EvaluationCategory {
+  EvaluationCategoryID int [pk]
+  EvaluationDomainID int [ref: > EvaluationDomain.EvaluationDomainID]
+  CategoryName varchar
+  Description text
+}
+
+Table EvaluationCriterion {
+  CriterionID int [pk]
+  EvaluationCategoryID int [ref: > EvaluationCategory.EvaluationCategoryID]
+  CriterionName varchar
+  Definition text
+  InternalCriterionWeight decimal
+}
+
+Table ClientPersona {
+  PersonaID int [pk]
+  PersonaName varchar
+  Description text
+}
+
+Table WeightProfile {
+  WeightProfileID int [pk]
+  PersonaID int [ref: > ClientPersona.PersonaID, null]
+  ProfileName varchar
+  ProfileType varchar
+  Description text
+}
+
+Table CategoryWeight {
+  WeightProfileID int [pk, ref: > WeightProfile.WeightProfileID]
+  EvaluationCategoryID int [pk, ref: > EvaluationCategory.EvaluationCategoryID]
+  Weight decimal
+}
+
+Table EvaluationStatus {
+  StatusID int [pk]
+  StatusName varchar
+}
+
+Table VendorEvaluation {
+  EvaluationID int [pk]
+  VendorID int [ref: > Vendor.VendorID]
+  EvaluationDomainID int [ref: > EvaluationDomain.EvaluationDomainID]
+  StatusID int [ref: > EvaluationStatus.StatusID]
+  EvaluationDate date
+  EvaluatedBy varchar
+  EvaluationFrameworkLabel varchar
+  Notes text
+  CreatedAt datetime
+  UpdatedAt datetime
+}
+
+Table VendorCriterionScore {
+  CriterionScoreID int [pk]
+  EvaluationID int [ref: > VendorEvaluation.EvaluationID]
+  CriterionID int [ref: > EvaluationCriterion.CriterionID]
+  Score int
+  ConfidenceLevel varchar
+  Justification text
+  CreatedAt datetime
+  UpdatedAt datetime
+}
+
+Table EvidenceSource {
+  EvidenceSourceID int [pk]
+  SourceType varchar
+  Description text
+}
+
+Table Evidence {
+  EvidenceID int [pk]
+  CriterionScoreID int [ref: > VendorCriterionScore.CriterionScoreID]
+  EvidenceSourceID int [ref: > EvidenceSource.EvidenceSourceID]
+  Title varchar
+  ReferenceURL varchar
+  Notes text
+  CreatedAt datetime
+  UpdatedAt datetime
+}
