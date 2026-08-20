@@ -175,6 +175,9 @@ def clean_url(value):
 def normalize_confidence(value):
     """
     Normalize evidence confidence labels.
+
+    Supports both single confidence levels and
+    combined confidence levels.
     """
 
     value = clean_text(value)
@@ -184,6 +187,32 @@ def normalize_confidence(value):
 
     normalized = value.lower()
 
+    # Normalize different dash characters
+    normalized = normalized.replace(
+        "–", "-"
+    ).replace(
+        "—", "-"
+    )
+
+    # Normalize spaces around "/"
+    normalized = re.sub(
+        r"\s*/\s*",
+        " / ",
+        normalized
+    )
+
+    # Handle combined confidence values
+    combined_mapping = {
+        "high / medium": "High / Medium",
+        "medium / high": "High / Medium",
+        "medium / low": "Medium / Low",
+        "low / medium": "Medium / Low",
+    }
+
+    if normalized in combined_mapping:
+        return combined_mapping[normalized]
+
+    # Handle individual confidence values
     confidence_mapping = {
         "high": "High",
         "high confidence": "High",
@@ -194,7 +223,10 @@ def normalize_confidence(value):
         "low confidence": "Low",
     }
 
-    return confidence_mapping.get(normalized, value)
+    return confidence_mapping.get(
+        normalized,
+        value
+    )
 
 
 # ---------------------------------------------------------
@@ -237,6 +269,14 @@ def normalize_source_type(value):
 def normalize_category(value):
     """
     Standardize evaluation category formatting.
+
+    Converts:
+        "1 - Core Agent Intelligence"
+    into:
+        "Category 1 - Core Agent Intelligence"
+
+    This ensures the same category has one
+    standardized representation across vendors.
     """
 
     value = clean_text(value)
@@ -244,11 +284,32 @@ def normalize_category(value):
     if not value:
         return ""
 
-    # Normalize common dash characters
+    # Normalize different dash characters
     value = value.replace("–", "-").replace("—", "-")
 
     # Remove accidental repeated spaces
     value = re.sub(r"\s+", " ", value)
+
+    # Normalize category numbering.
+    #
+    # Example:
+    # "1 - Core Agent Intelligence"
+    # becomes:
+    # "Category 1 - Core Agent Intelligence"
+    #
+    # Existing values such as:
+    # "Category 1 - Core Agent Intelligence"
+    # remain unchanged.
+    category_pattern = re.match(
+        r"^(\d+)\s*-\s*(.+)$",
+        value
+    )
+
+    if category_pattern:
+        number = category_pattern.group(1)
+        name = category_pattern.group(2).strip()
+
+        value = f"Category {number} - {name}"
 
     return value.strip()
 

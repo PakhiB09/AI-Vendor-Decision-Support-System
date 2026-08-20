@@ -1,0 +1,69 @@
+======================================================================
+STEP 20 - DATA QUALITY AND COMPLETENESS REPORT
+======================================================================
+
+Input file: C:\Users\Pakhi\Desktop\Vendor-Evaluation-&-Decision-Support System\data\cleaned\vendor_evaluation_cleaned.csv
+Rows checked: 136
+Columns checked: 8
+Expected vendors: 8
+Expected criteria per vendor: 17
+
+----------------------------------------------------------------------
+VALIDATION RESULTS
+----------------------------------------------------------------------
+01. [PASS] Cleaned dataset exists
+    C:\Users\Pakhi\Desktop\Vendor-Evaluation-&-Decision-Support System\data\cleaned\vendor_evaluation_cleaned.csv
+
+02. [PASS] Required columns present
+    All 8 required columns are present.
+
+03. [PASS] Total row count
+    Expected 136 rows; found 136.
+
+04. [PASS] Expected vendors present
+    All 8 expected vendors are present.
+
+05. [PASS] Records per vendor
+    Every vendor contains exactly 17 records.
+
+06. [PASS] Missing value check
+    No missing or blank values found in required columns.
+
+07. [PASS] Duplicate row check
+    Duplicate rows found: 0.
+
+08. [PASS] Vendor-criterion uniqueness
+    No duplicate Vendor + Evaluation Criterion combinations found.
+
+09. [PASS] Criteria consistency across vendors
+    All vendors use the same set of 17 evaluation criteria.
+
+10. [PASS] Criterion-category consistency
+    Every evaluation criterion maps to one consistent evaluation category.
+
+11. [PASS] Evidence confidence values
+    All Evidence Confidence values are valid: High, High / Medium, Low, Medium, Medium / Low
+
+12. [PASS] Source URL check
+    All records contain a valid HTTP/HTTPS URL or are explicitly documented as not publicly evaluated with Low confidence. Accepted no-source records: 2.
+
+13. [PASS] Evidence summary completeness
+    Every evaluation record contains an evidence summary.
+
+14. [PASS] Evaluation notes completeness
+    Every evaluation record contains evaluation notes.
+
+15. [PASS] Overall dataset readiness
+    All validation checks passed. Dataset is ready for the scoring stage.
+
+----------------------------------------------------------------------
+SUMMARY
+----------------------------------------------------------------------
+Checks passed: 15
+Checks failed: 0
+
+FINAL STATUS: PASS
+The cleaned dataset passed all data quality and completeness checks.
+The dataset is ready for Step 21 scoring.
+
+======================================================================
