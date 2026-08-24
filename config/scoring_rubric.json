@@ -1,0 +1,67 @@
+{
+    "framework_name": "Vendor Decision-Support Evaluation Framework",
+    "framework_version": "1.0",
+    "scoring_scale": {
+        "type": "five_point",
+        "minimum_score": 1,
+        "maximum_score": 5,
+        "not_evaluated_value": null
+    },
+    "ratings": {
+        "5": {
+            "rating": "Excellent",
+            "description": "Comprehensive enterprise-grade capability with strong implementation and extensive supporting evidence."
+        },
+        "4": {
+            "rating": "Strong",
+            "description": "Strong capability with only minor limitations or missing advanced features."
+        },
+        "3": {
+            "rating": "Adequate",
+            "description": "Meets core enterprise requirements but lacks several advanced capabilities."
+        },
+        "2": {
+            "rating": "Limited",
+            "description": "Partial implementation with significant functional limitations."
+        },
+        "1": {
+            "rating": "Poor",
+            "description": "Minimal capability or no meaningful support for the evaluated criterion."
+        }
+    },
+    "not_evaluated": {
+        "status": "Not Evaluated",
+        "rating": "N/A",
+        "score": null,
+        "description": "Insufficient publicly available evidence to make a defensible assessment."
+    },
+    "evaluation_statuses": {
+        "evaluated": "Evaluated",
+        "not_evaluated": "Not Evaluated"
+    },
+    "evidence_confidence": {
+        "High": {
+            "description": "Multiple high-quality, authoritative sources consistently support the assigned score."
+        },
+        "Medium": {
+            "description": "Adequate supporting evidence exists, but coverage or consistency is limited."
+        },
+        "Low": {
+            "description": "Limited publicly available evidence; the assigned score should be interpreted with caution."
+        },
+        "High / Medium": {
+            "description": "Evidence contains a combination of high- and medium-confidence supporting sources."
+        },
+        "Medium / Low": {
+            "description": "Evidence contains a combination of medium- and low-confidence supporting sources."
+        }
+    },
+    "scoring_principles": [
+        "Scores must be based on demonstrated capabilities rather than unsupported assumptions.",
+        "Evidence confidence does not directly modify the numerical score.",
+        "The same scoring standard must be applied consistently across all vendors.",
+        "A criterion with insufficient evidence must be marked Not Evaluated rather than assigned an estimated score.",
+        "Score justification must explain the evidence-based reasoning behind the assigned score.",
+        "Scores must remain traceable to the supporting evidence sources."
+    ]
+}
