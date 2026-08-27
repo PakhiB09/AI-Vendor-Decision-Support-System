@@ -1,29 +1,26 @@
 """
 STEP 24 - VALIDATE MYSQL DATABASE
 
-Validates the vendor decision-support database after
-the Step 23 database loading process.
+Validates the complete relational database for the
+Vendor Evaluation & Decision-Support System.
 
-Checks:
+Tables validated:
 
-    - Table record counts
-    - Vendor coverage
-    - Criterion coverage
-    - Vendor-criterion uniqueness
-    - Evaluation status integrity
-    - Score integrity
-    - Foreign-key relationships
-    - Category coverage
-    - Full relational join
+    vendors
+    categories
+    criteria
+    evaluations
+    personas
+    persona_weights
 """
 
 from pathlib import Path
 import os
 
-import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
+from sqlalchemy.exc import SQLAlchemyError
 
 
 # ============================================================
@@ -36,11 +33,6 @@ ENV_FILE = PROJECT_ROOT / ".env"
 
 load_dotenv(ENV_FILE)
 
-
-# ============================================================
-# DATABASE CONFIGURATION
-# ============================================================
-
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "3306")
 DB_NAME = os.getenv(
@@ -52,29 +44,10 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 
 # ============================================================
-# EXPECTED DATABASE STRUCTURE
-# ============================================================
-
-EXPECTED_COUNTS = {
-    "vendors": 8,
-    "categories": 5,
-    "criteria": 17,
-    "evaluations": 136,
-}
-
-
-# ============================================================
 # DATABASE CONNECTION
 # ============================================================
 
 def create_database_engine():
-    """
-    Create a safe SQLAlchemy connection URL.
-
-    URL.create() safely handles special characters
-    contained in the database password.
-    """
-
     if not DB_PASSWORD:
         raise ValueError(
             "DB_PASSWORD is missing from .env"
@@ -96,26 +69,49 @@ def create_database_engine():
 
 
 # ============================================================
-# CHECK TABLE COUNTS
+# HELPER
+# ============================================================
+
+def get_count(connection, table_name):
+    """
+    Return the number of records in a table.
+    """
+
+    query = text(
+        f"SELECT COUNT(*) FROM {table_name}"
+    )
+
+    return connection.execute(query).scalar()
+
+
+# ============================================================
+# TABLE COUNT VALIDATION
 # ============================================================
 
 def validate_table_counts(connection):
 
-    print("\n------------------------------------------------------------")
+    print("\n" + "-" * 60)
     print("TABLE COUNT VALIDATION")
-    print("------------------------------------------------------------")
+    print("-" * 60)
 
-    for table_name, expected_count in EXPECTED_COUNTS.items():
+    expected_counts = {
+        "vendors": 8,
+        "categories": 5,
+        "criteria": 17,
+        "evaluations": 136,
+        "personas": 5,
+        "persona_weights": 25,
+    }
 
-        query = text(
-            f"SELECT COUNT(*) FROM {table_name}"
+    for table_name, expected_count in expected_counts.items():
+
+        actual_count = get_count(
+            connection,
+            table_name
         )
 
-        actual_count = connection.execute(
-            query
-        ).scalar()
-
         if actual_count != expected_count:
+
             raise ValueError(
                 f"{table_name}: expected "
                 f"{expected_count}, found "
@@ -129,14 +125,14 @@ def validate_table_counts(connection):
 
 
 # ============================================================
-# CHECK VENDOR COVERAGE
+# VENDOR COVERAGE
 # ============================================================
 
 def validate_vendor_coverage(connection):
 
-    print("\n------------------------------------------------------------")
+    print("\n" + "-" * 60)
     print("VENDOR COVERAGE VALIDATION")
-    print("------------------------------------------------------------")
+    print("-" * 60)
 
     query = text("""
         SELECT
@@ -153,19 +149,25 @@ def validate_vendor_coverage(connection):
             v.vendor_id
     """)
 
-    df = pd.read_sql(
-        query,
-        connection
-    )
+    rows = connection.execute(query).fetchall()
 
-    invalid = df[
-        df["evaluation_count"] != 17
+    if len(rows) != 8:
+
+        raise ValueError(
+            f"Expected 8 vendors, found {len(rows)}"
+        )
+
+    invalid = [
+        row
+        for row in rows
+        if row.evaluation_count != 17
     ]
 
-    if not invalid.empty:
+    if invalid:
+
         raise ValueError(
-            "Vendor coverage validation failed:\n"
-            + invalid.to_string(index=False)
+            "One or more vendors do not contain "
+            "exactly 17 evaluation records."
         )
 
     print(
@@ -175,14 +177,66 @@ def validate_vendor_coverage(connection):
 
 
 # ============================================================
-# CHECK DUPLICATES
+# CRITERIA COVERAGE
+# ============================================================
+
+def validate_criteria_coverage(connection):
+
+    print("\n" + "-" * 60)
+    print("CRITERIA COVERAGE VALIDATION")
+    print("-" * 60)
+
+    query = text("""
+        SELECT
+            c.criterion_id,
+            c.criterion_name,
+            COUNT(e.evaluation_id) AS evaluation_count
+        FROM criteria c
+        LEFT JOIN evaluations e
+            ON c.criterion_id = e.criterion_id
+        GROUP BY
+            c.criterion_id,
+            c.criterion_name
+        ORDER BY
+            c.criterion_id
+    """)
+
+    rows = connection.execute(query).fetchall()
+
+    if len(rows) != 17:
+
+        raise ValueError(
+            f"Expected 17 criteria, found {len(rows)}"
+        )
+
+    invalid = [
+        row
+        for row in rows
+        if row.evaluation_count != 8
+    ]
+
+    if invalid:
+
+        raise ValueError(
+            "One or more criteria do not contain "
+            "exactly 8 evaluation records."
+        )
+
+    print(
+        "[PASS] All 17 criteria contain "
+        "8 evaluation records"
+    )
+
+
+# ============================================================
+# DUPLICATE VALIDATION
 # ============================================================
 
 def validate_duplicates(connection):
 
-    print("\n------------------------------------------------------------")
+    print("\n" + "-" * 60)
     print("DUPLICATE VALIDATION")
-    print("------------------------------------------------------------")
+    print("-" * 60)
 
     query = text("""
         SELECT
@@ -196,15 +250,13 @@ def validate_duplicates(connection):
         HAVING COUNT(*) > 1
     """)
 
-    df = pd.read_sql(
-        query,
-        connection
-    )
+    duplicates = connection.execute(query).fetchall()
 
-    if not df.empty:
+    if duplicates:
+
         raise ValueError(
-            "Duplicate vendor-criterion combinations found:\n"
-            + df.to_string(index=False)
+            f"Found {len(duplicates)} duplicate "
+            "vendor-criterion combinations."
         )
 
     print(
@@ -213,14 +265,14 @@ def validate_duplicates(connection):
 
 
 # ============================================================
-# CHECK EVALUATION STATUSES
+# EVALUATION STATUS VALIDATION
 # ============================================================
 
-def validate_statuses(connection):
+def validate_evaluation_status(connection):
 
-    print("\n------------------------------------------------------------")
+    print("\n" + "-" * 60)
     print("EVALUATION STATUS VALIDATION")
-    print("------------------------------------------------------------")
+    print("-" * 60)
 
     query = text("""
         SELECT
@@ -230,105 +282,87 @@ def validate_statuses(connection):
         GROUP BY evaluation_status
     """)
 
-    df = pd.read_sql(
-        query,
-        connection
-    )
+    rows = connection.execute(query).fetchall()
 
-    status_counts = dict(
-        zip(
-            df["evaluation_status"],
-            df["record_count"]
-        )
-    )
+    status_counts = {
+        row.evaluation_status: row.record_count
+        for row in rows
+    }
 
-    evaluated = status_counts.get(
-        "Evaluated",
-        0
-    )
+    expected = {
+        "Evaluated": 130,
+        "Not Evaluated": 6,
+    }
 
-    not_evaluated = status_counts.get(
-        "Not Evaluated",
-        0
-    )
+    for status, expected_count in expected.items():
 
-    if evaluated != 130:
-        raise ValueError(
-            f"Expected 130 Evaluated records, "
-            f"found {evaluated}"
+        actual_count = status_counts.get(
+            status,
+            0
         )
 
-    if not_evaluated != 6:
-        raise ValueError(
-            f"Expected 6 Not Evaluated records, "
-            f"found {not_evaluated}"
+        if actual_count != expected_count:
+
+            raise ValueError(
+                f"{status}: expected "
+                f"{expected_count}, found "
+                f"{actual_count}"
+            )
+
+        print(
+            f"[PASS] {status} records: "
+            f"{actual_count}"
         )
-
-    print(
-        "[PASS] Evaluated records: 130"
-    )
-
-    print(
-        "[PASS] Not Evaluated records: 6"
-    )
 
 
 # ============================================================
-# CHECK SCORE INTEGRITY
+# SCORE VALIDATION
 # ============================================================
 
 def validate_scores(connection):
 
-    print("\n------------------------------------------------------------")
+    print("\n" + "-" * 60)
     print("SCORE VALIDATION")
-    print("------------------------------------------------------------")
+    print("-" * 60)
 
-    invalid_evaluated = text("""
-        SELECT
-            evaluation_id,
-            assigned_score
-        FROM evaluations
-        WHERE evaluation_status = 'Evaluated'
-          AND (
-                assigned_score IS NULL
-                OR assigned_score < 1
-                OR assigned_score > 5
-              )
-    """)
+    invalid_evaluated = connection.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM evaluations
+            WHERE evaluation_status = 'Evaluated'
+              AND (
+                    assigned_score IS NULL
+                    OR assigned_score < 1
+                    OR assigned_score > 5
+                  )
+        """)
+    ).scalar()
 
-    df_invalid = pd.read_sql(
-        invalid_evaluated,
-        connection
-    )
+    if invalid_evaluated != 0:
 
-    if not df_invalid.empty:
         raise ValueError(
-            "Invalid evaluated scores found:\n"
-            + df_invalid.to_string(index=False)
+            "Found evaluated records with "
+            "invalid scores."
         )
 
     print(
         "[PASS] Evaluated scores are within 1-5"
     )
 
-    invalid_na = text("""
-        SELECT
-            evaluation_id,
-            assigned_score
-        FROM evaluations
-        WHERE evaluation_status = 'Not Evaluated'
-          AND assigned_score IS NOT NULL
-    """)
+    invalid_not_evaluated = connection.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM evaluations
+            WHERE evaluation_status = 'Not Evaluated'
+              AND assigned_score IS NOT NULL
+        """)
+    ).scalar()
 
-    df_na = pd.read_sql(
-        invalid_na,
-        connection
-    )
+    if invalid_not_evaluated != 0:
 
-    if not df_na.empty:
         raise ValueError(
-            "Not Evaluated records contain scores:\n"
-            + df_na.to_string(index=False)
+            "Found Not Evaluated records "
+            "containing scores."
         )
 
     print(
@@ -337,72 +371,84 @@ def validate_scores(connection):
 
 
 # ============================================================
-# CHECK FOREIGN-KEY RELATIONSHIPS
+# RELATIONSHIP VALIDATION
 # ============================================================
 
 def validate_relationships(connection):
 
-    print("\n------------------------------------------------------------")
+    print("\n" + "-" * 60)
     print("RELATIONSHIP VALIDATION")
-    print("------------------------------------------------------------")
+    print("-" * 60)
 
-    invalid_vendors = text("""
-        SELECT COUNT(*)
-        FROM evaluations e
-        LEFT JOIN vendors v
-            ON e.vendor_id = v.vendor_id
-        WHERE v.vendor_id IS NULL
-    """)
+    # --------------------------------------------------------
+    # Evaluation -> Vendor
+    # --------------------------------------------------------
 
-    invalid_vendor_count = connection.execute(
-        invalid_vendors
+    invalid_vendor_refs = connection.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM evaluations e
+            LEFT JOIN vendors v
+                ON e.vendor_id = v.vendor_id
+            WHERE v.vendor_id IS NULL
+        """)
     ).scalar()
 
-    if invalid_vendor_count != 0:
+    if invalid_vendor_refs != 0:
+
         raise ValueError(
-            "Found evaluations with invalid vendor references"
+            "Found evaluations with invalid "
+            "vendor references."
         )
 
     print(
         "[PASS] All evaluation vendor references are valid"
     )
 
-    invalid_criteria = text("""
-        SELECT COUNT(*)
-        FROM evaluations e
-        LEFT JOIN criteria c
-            ON e.criterion_id = c.criterion_id
-        WHERE c.criterion_id IS NULL
-    """)
+    # --------------------------------------------------------
+    # Evaluation -> Criterion
+    # --------------------------------------------------------
 
-    invalid_criterion_count = connection.execute(
-        invalid_criteria
+    invalid_criterion_refs = connection.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM evaluations e
+            LEFT JOIN criteria c
+                ON e.criterion_id = c.criterion_id
+            WHERE c.criterion_id IS NULL
+        """)
     ).scalar()
 
-    if invalid_criterion_count != 0:
+    if invalid_criterion_refs != 0:
+
         raise ValueError(
-            "Found evaluations with invalid criterion references"
+            "Found evaluations with invalid "
+            "criterion references."
         )
 
     print(
         "[PASS] All evaluation criterion references are valid"
     )
 
-    invalid_categories = text("""
-        SELECT COUNT(*)
-        FROM criteria c
-        LEFT JOIN categories cat
-            ON c.category_id = cat.category_id
-        WHERE cat.category_id IS NULL
-    """)
+    # --------------------------------------------------------
+    # Criterion -> Category
+    # --------------------------------------------------------
 
-    invalid_category_count = connection.execute(
-        invalid_categories
+    invalid_category_refs = connection.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM criteria c
+            LEFT JOIN categories cat
+                ON c.category_id = cat.category_id
+            WHERE cat.category_id IS NULL
+        """)
     ).scalar()
 
-    if invalid_category_count != 0:
+    if invalid_category_refs != 0:
+
         raise ValueError(
-            "Found criteria with invalid category references"
+            "Found criteria with invalid "
+            "category references."
         )
 
     print(
@@ -411,39 +457,398 @@ def validate_relationships(connection):
 
 
 # ============================================================
-# CHECK FULL JOIN
+# PERSONA VALIDATION
 # ============================================================
 
-def validate_full_join(connection):
+def validate_personas(connection):
 
-    print("\n------------------------------------------------------------")
+    print("\n" + "-" * 60)
+    print("PERSONA VALIDATION")
+    print("-" * 60)
+
+    # --------------------------------------------------------
+    # Persona count
+    # --------------------------------------------------------
+
+    persona_count = get_count(
+        connection,
+        "personas"
+    )
+
+    if persona_count != 5:
+
+        raise ValueError(
+            f"Expected 5 personas, found "
+            f"{persona_count}"
+        )
+
+    print("[PASS] 5 personas present")
+
+    # --------------------------------------------------------
+    # Required fields
+    # --------------------------------------------------------
+
+    missing_fields = connection.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM personas
+            WHERE persona_id IS NULL
+               OR persona_name IS NULL
+               OR TRIM(persona_name) = ''
+        """)
+    ).scalar()
+
+    if missing_fields != 0:
+
+        raise ValueError(
+            "Found personas with missing "
+            "required fields."
+        )
+
+    print(
+        "[PASS] Persona required fields are complete"
+    )
+
+    # --------------------------------------------------------
+    # Duplicate persona IDs
+    # --------------------------------------------------------
+
+    duplicate_ids = connection.execute(
+        text("""
+            SELECT
+                persona_id,
+                COUNT(*) AS duplicate_count
+            FROM personas
+            GROUP BY persona_id
+            HAVING COUNT(*) > 1
+        """)
+    ).fetchall()
+
+    if duplicate_ids:
+
+        raise ValueError(
+            "Duplicate persona IDs found."
+        )
+
+    print(
+        "[PASS] Persona IDs are unique"
+    )
+
+    # --------------------------------------------------------
+    # Duplicate persona names
+    # --------------------------------------------------------
+
+    duplicate_names = connection.execute(
+        text("""
+            SELECT
+                persona_name,
+                COUNT(*) AS duplicate_count
+            FROM personas
+            GROUP BY persona_name
+            HAVING COUNT(*) > 1
+        """)
+    ).fetchall()
+
+    if duplicate_names:
+
+        raise ValueError(
+            "Duplicate persona names found."
+        )
+
+    print(
+        "[PASS] Persona names are unique"
+    )
+
+
+# ============================================================
+# PERSONA WEIGHT VALIDATION
+# ============================================================
+
+def validate_persona_weights(connection):
+
+    print("\n" + "-" * 60)
+    print("PERSONA WEIGHT VALIDATION")
+    print("-" * 60)
+
+    # --------------------------------------------------------
+    # Total weight records
+    # --------------------------------------------------------
+
+    weight_count = get_count(
+        connection,
+        "persona_weights"
+    )
+
+    if weight_count != 25:
+
+        raise ValueError(
+            f"Expected 25 persona weights, "
+            f"found {weight_count}"
+        )
+
+    print(
+        "[PASS] 25 persona weight records present"
+    )
+
+    # --------------------------------------------------------
+    # Every persona must have exactly 5 weights
+    # --------------------------------------------------------
+
+    query = text("""
+        SELECT
+            p.persona_id,
+            p.persona_name,
+            COUNT(pw.category_id) AS category_count
+        FROM personas p
+        LEFT JOIN persona_weights pw
+            ON p.persona_id = pw.persona_id
+        GROUP BY
+            p.persona_id,
+            p.persona_name
+        ORDER BY
+            p.persona_id
+    """)
+
+    rows = connection.execute(query).fetchall()
+
+    invalid_counts = [
+        row
+        for row in rows
+        if row.category_count != 5
+    ]
+
+    if invalid_counts:
+
+        raise ValueError(
+            "One or more personas do not have "
+            "exactly 5 category weights."
+        )
+
+    print(
+        "[PASS] Every persona has 5 category weights"
+    )
+
+    # --------------------------------------------------------
+    # No duplicate persona-category combinations
+    # --------------------------------------------------------
+
+    duplicate_weights = connection.execute(
+        text("""
+            SELECT
+                persona_id,
+                category_id,
+                COUNT(*) AS duplicate_count
+            FROM persona_weights
+            GROUP BY
+                persona_id,
+                category_id
+            HAVING COUNT(*) > 1
+        """)
+    ).fetchall()
+
+    if duplicate_weights:
+
+        raise ValueError(
+            "Duplicate persona-category weight "
+            "records found."
+        )
+
+    print(
+        "[PASS] No duplicate persona-category weights"
+    )
+
+    # --------------------------------------------------------
+    # Weight range
+    # --------------------------------------------------------
+
+    invalid_range = connection.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM persona_weights
+            WHERE weight IS NULL
+               OR weight < 0
+               OR weight > 1
+        """)
+    ).scalar()
+
+    if invalid_range != 0:
+
+        raise ValueError(
+            "Found persona weights outside "
+            "the valid range 0-1."
+        )
+
+    print(
+        "[PASS] All persona weights are within 0-1"
+    )
+
+    # --------------------------------------------------------
+    # Weight total
+    # --------------------------------------------------------
+
+    query = text("""
+        SELECT
+            p.persona_id,
+            p.persona_name,
+            ROUND(SUM(pw.weight), 4) AS total_weight
+        FROM personas p
+        JOIN persona_weights pw
+            ON p.persona_id = pw.persona_id
+        GROUP BY
+            p.persona_id,
+            p.persona_name
+        ORDER BY
+            p.persona_id
+    """)
+
+    rows = connection.execute(query).fetchall()
+
+    invalid_totals = [
+        row
+        for row in rows
+        if abs(float(row.total_weight) - 1.0) > 0.0001
+    ]
+
+    if invalid_totals:
+
+        raise ValueError(
+            "One or more persona weight profiles "
+            "do not total 100%."
+        )
+
+    print(
+        "[PASS] All persona weight profiles total 100%"
+    )
+
+
+# ============================================================
+# PERSONA RELATIONSHIP VALIDATION
+# ============================================================
+
+def validate_persona_relationships(connection):
+
+    print("\n" + "-" * 60)
+    print("PERSONA RELATIONSHIP VALIDATION")
+    print("-" * 60)
+
+    # --------------------------------------------------------
+    # Persona weight -> Persona
+    # --------------------------------------------------------
+
+    invalid_persona_refs = connection.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM persona_weights pw
+            LEFT JOIN personas p
+                ON pw.persona_id = p.persona_id
+            WHERE p.persona_id IS NULL
+        """)
+    ).scalar()
+
+    if invalid_persona_refs != 0:
+
+        raise ValueError(
+            "Found persona weights with invalid "
+            "persona references."
+        )
+
+    print(
+        "[PASS] All persona references are valid"
+    )
+
+    # --------------------------------------------------------
+    # Persona weight -> Category
+    # --------------------------------------------------------
+
+    invalid_category_refs = connection.execute(
+        text("""
+            SELECT COUNT(*)
+            FROM persona_weights pw
+            LEFT JOIN categories c
+                ON pw.category_id = c.category_id
+            WHERE c.category_id IS NULL
+        """)
+    ).scalar()
+
+    if invalid_category_refs != 0:
+
+        raise ValueError(
+            "Found persona weights with invalid "
+            "category references."
+        )
+
+    print(
+        "[PASS] All persona category references are valid"
+    )
+
+
+# ============================================================
+# EVALUATION RELATIONAL JOIN VALIDATION
+# ============================================================
+
+def validate_evaluation_join(connection):
+
+    print("\n" + "-" * 60)
     print("RELATIONAL JOIN VALIDATION")
-    print("------------------------------------------------------------")
+    print("-" * 60)
 
     query = text("""
         SELECT COUNT(*)
         FROM evaluations e
-        INNER JOIN vendors v
+        JOIN vendors v
             ON e.vendor_id = v.vendor_id
-        INNER JOIN criteria c
+        JOIN criteria c
             ON e.criterion_id = c.criterion_id
-        INNER JOIN categories cat
+        JOIN categories cat
             ON c.category_id = cat.category_id
     """)
 
-    joined_count = connection.execute(
-        query
-    ).scalar()
+    joined_count = connection.execute(query).scalar()
 
     if joined_count != 136:
+
         raise ValueError(
-            f"Expected 136 records after full join, "
+            f"Expected 136 joined evaluation records, "
             f"found {joined_count}"
         )
 
     print(
         "[PASS] All 136 evaluation records "
-        "successfully join across all tables"
+        "successfully join across evaluation tables"
+    )
+
+
+# ============================================================
+# PERSONA RELATIONAL JOIN VALIDATION
+# ============================================================
+
+def validate_persona_join(connection):
+
+    print("\n" + "-" * 60)
+    print("PERSONA JOIN VALIDATION")
+    print("-" * 60)
+
+    query = text("""
+        SELECT COUNT(*)
+        FROM personas p
+        JOIN persona_weights pw
+            ON p.persona_id = pw.persona_id
+        JOIN categories c
+            ON pw.category_id = c.category_id
+    """)
+
+    joined_count = connection.execute(query).scalar()
+
+    if joined_count != 25:
+
+        raise ValueError(
+            f"Expected 25 persona-weight-category "
+            f"records, found {joined_count}"
+        )
+
+    print(
+        "[PASS] All 25 persona weights successfully "
+        "join to personas and categories"
     )
 
 
@@ -451,11 +856,11 @@ def validate_full_join(connection):
 # VENDOR SCORE SUMMARY
 # ============================================================
 
-def print_vendor_summary(connection):
+def validate_vendor_score_summary(connection):
 
-    print("\n------------------------------------------------------------")
+    print("\n" + "-" * 60)
     print("VENDOR SCORE SUMMARY")
-    print("------------------------------------------------------------")
+    print("-" * 60)
 
     query = text("""
         SELECT
@@ -486,7 +891,8 @@ def print_vendor_summary(connection):
             ) AS average_score
 
         FROM vendors v
-        INNER JOIN evaluations e
+
+        LEFT JOIN evaluations e
             ON v.vendor_id = e.vendor_id
 
         GROUP BY
@@ -497,14 +903,25 @@ def print_vendor_summary(connection):
             average_score DESC
     """)
 
-    df = pd.read_sql(
-        query,
-        connection
-    )
+    rows = connection.execute(query).fetchall()
 
     print(
-        df.to_string(index=False)
+        f"{'vendor_name':<20}"
+        f"{'evaluated':<12}"
+        f"{'not_evaluated':<15}"
+        f"average_score"
     )
+
+    print("-" * 60)
+
+    for row in rows:
+
+        print(
+            f"{row.vendor_name:<20}"
+            f"{row.evaluated_criteria:<12}"
+            f"{row.not_evaluated_criteria:<15}"
+            f"{row.average_score}"
+        )
 
 
 # ============================================================
@@ -527,6 +944,10 @@ def main():
 
         with engine.connect() as connection:
 
+            # ------------------------------------------------
+            # Core evaluation database
+            # ------------------------------------------------
+
             validate_table_counts(
                 connection
             )
@@ -535,11 +956,15 @@ def main():
                 connection
             )
 
+            validate_criteria_coverage(
+                connection
+            )
+
             validate_duplicates(
                 connection
             )
 
-            validate_statuses(
+            validate_evaluation_status(
                 connection
             )
 
@@ -551,20 +976,52 @@ def main():
                 connection
             )
 
-            validate_full_join(
+            # ------------------------------------------------
+            # Persona weighting framework
+            # ------------------------------------------------
+
+            validate_personas(
                 connection
             )
 
-            print_vendor_summary(
+            validate_persona_weights(
                 connection
             )
 
-    finally:
+            validate_persona_relationships(
+                connection
+            )
 
-        engine.dispose()
+            # ------------------------------------------------
+            # Relational joins
+            # ------------------------------------------------
+
+            validate_evaluation_join(
+                connection
+            )
+
+            validate_persona_join(
+                connection
+            )
+
+            # ------------------------------------------------
+            # Vendor summary
+            # ------------------------------------------------
+
+            validate_vendor_score_summary(
+                connection
+            )
+
+    except SQLAlchemyError as error:
+
+        print(
+            "\n[FAIL] Database validation failed."
+        )
+
+        raise error
 
     print(
-        "\n------------------------------------------------------------"
+        "\n" + "-" * 60
     )
 
     print(
@@ -572,7 +1029,8 @@ def main():
     )
 
     print(
-        "MySQL database validation completed successfully."
+        "Complete MySQL database validation "
+        "completed successfully."
     )
 
     print(
