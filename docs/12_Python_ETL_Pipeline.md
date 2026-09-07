@@ -2,259 +2,178 @@
 
 ## Purpose
 
-The AI Vendor Comparison Dashboard relies on an Extract–Transform–Load (ETL) pipeline to convert raw vendor evaluation data into structured, standardized, and analytics-ready information stored in the SQL database.
+The AI Vendor Comparison Dashboard relies on an Extract–Transform–Load (ETL) pipeline to convert raw vendor evaluation data into structured, standardized, and analytics-ready records stored in the SQL database.
 
-Rather than implementing all processing in a single script, the pipeline is designed as a modular, configuration-driven workflow. This approach improves maintainability, supports future enhancements, and allows the system to evaluate different vendors, industries, and client scenarios without modifying the application logic.
+To preserve architectural separation of concerns, the Python pipeline is responsible for **static data engineering, validation, internal weight re-normalization, and database ingestion**. Dynamic client persona re-weighting, real-time rankings, and recommendation generation are strictly decoupled from Python and executed downstream inside the Power BI DAX engine.
 
 ---
 
 # ETL Pipeline Overview
 
 ```
-Configuration Files
-(vendors, criteria, weights, personas)
-
+External Configuration & Seeds
+(categories, criteria, personas)
           │
           ▼
-
-      Extract
-(Read raw vendor data)
-
+       Extract
+(Read raw vendor evidence & research)
           │
           ▼
-
-       Clean
-(Validate and standardize data)
-
+        Clean
+(Validate, standardize, and enforce types)
           │
           ▼
-
-     Normalize
-(Convert values to a common scale)
-
+      Normalize
+(Map qualitative evidence to standard 1–5 scale)
           │
           ▼
-
-       Score
-(Apply weights and calculate rankings)
-
+   Prepare Scoring
+(Handle missing data & re-normalize criterion weights)
           │
           ▼
-
         Load
-(Store processed data in SQL)
-
+(Populate relational SQL database)
           │
           ▼
-
-   Power BI Dashboard
+ Power BI (DAX Dynamic Recalculation)
 ```
 
 ---
 
-# Stage 1 – Extract
+# ETL Pipeline Architecture
+
+## Stage 1 – Extract
 
 ### Objective
 
-Read raw vendor evaluation data from external sources.
+Incorporate raw vendor evaluation data and qualitative evidence from source files into dataframes without applying business transformations.
 
-No business logic or calculations are performed during this stage.
+### Data Sources
 
-### Possible Data Sources
-
-* CSV files
-* Excel spreadsheets
-* JSON files
-* REST APIs
-* Manual research datasets
-
-For the MVP, vendor data will be sourced from CSV or Excel files.
+- Local tabular files (`data/raw/*.csv` or `.xlsx`) containing research notes, citations, and vendor attributes.
 
 ### Input
 
-Raw vendor evaluation data.
+Raw tabular evidence files.
 
 ### Output
 
-A raw DataFrame containing the imported vendor information.
+Raw pandas DataFrames.
 
 ---
 
-# Stage 2 – Clean
+## Stage 2 – Clean
 
 ### Objective
 
-Improve data quality before any scoring or analysis takes place.
+Enforce schema constraints, sanitize text fields, and ensure relational referential integrity before loading.
 
 ### Responsibilities
 
-* Remove duplicate records
-* Handle missing values
-* Standardize vendor names
-* Standardize categorical values
-* Validate required fields
-* Detect invalid or unexpected values
-
-Examples include converting inconsistent values such as:
-
-* Azure, azure, MICROSOFT AZURE → Microsoft Azure
-* Excellent, excellent, EXCELLENT → Excellent
+- Standardize vendor naming conventions (e.g., `GCP` / `google-cloud` → `Google Cloud Platform`).
+- Strip whitespace and enforce character encoding standards.
+- Validate that foreign key references exist in dimension tables (`VendorID`, `CriterionID`, `EvaluationDomainID`).
+- Flag and quarantine invalid, duplicate, or unverified records.
 
 ### Input
 
-Raw DataFrame.
+Raw DataFrames.
 
 ### Output
 
-Validated and standardized DataFrame.
+Cleaned and validated DataFrames.
 
 ---
 
-# Stage 3 – Normalize
+## Stage 3 – Normalize
 
 ### Objective
 
-Convert different measurement scales into a common scoring system.
+Ensure all vendor evaluation metrics adhere to the standardized evaluation rubric.
 
-Since evaluation criteria may use different formats (numeric scales, percentages, or descriptive ratings), all values are normalized before scoring.
+### Responsibilities
 
-Examples include:
-
-* 1–5 ratings
-* 0–100 percentages
-* Gold/Silver/Bronze classifications
-* Excellent/Good/Fair/Poor ratings
-
-These values are converted into a single numerical scale (for example, 0–10) to enable consistent comparison across vendors.
+- Map input ratings directly to the project's uniform 1–5 integer scale.
+- Assign deterministic confidence rankings (`High`, `Medium`, `Low`) based on evidence source tiers.
+- Ensure data consistency across heterogeneous vendors.
 
 ### Input
 
-Clean DataFrame.
+Cleaned DataFrames.
 
 ### Output
 
-Normalized DataFrame.
+Normalized DataFrames.
 
 ---
 
-# Stage 4 – Score
+## Stage 4 – Prepare Scoring & Audit
 
 ### Objective
 
-Calculate vendor performance using the evaluation framework.
+Format criterion-level scores and handle missing data adjustments prior to database ingestion.
 
-During this stage, the system combines:
+### Responsibilities
 
-* Normalized criterion scores
-* Evaluation criteria
-* Category weights
-* Client persona priorities
-
-The pipeline calculates:
-
-* Weighted criterion scores
-* Category scores
-* Overall vendor score
-* Vendor ranking
-* Recommendation results
-
-This stage represents the core business logic of the application.
+- Calculate effective criterion weights per category if specific vendor criteria are marked `N/A` (redistributing missing weights proportionally across remaining criteria).
+- Assemble score justifications, timestamps, evaluator metadata, and source citations.
+- Construct the target entity payloads matching `VendorCriterionScore` and `Evidence` schemas.
+- **Out of Scope for this stage:** Persona weighting and final vendor rankings (computed dynamically in Power BI).
 
 ### Input
 
-Normalized DataFrame and configuration files.
+Normalized DataFrames and criterion reference tables.
 
 ### Output
 
-Fully evaluated vendor dataset.
+Analytics-ready DataFrames formatted for relational tables.
 
 ---
 
-# Stage 5 – Load
+## Stage 5 – Load
 
 ### Objective
 
-Store processed results inside the SQL database.
+Perform idempotent insertion of structured datasets into the relational SQL database via SQLAlchemy.
 
-Processed information is inserted into the appropriate database tables, making it available for reporting and visualization.
+### Responsibilities
 
-The ETL pipeline does not communicate directly with Power BI. Instead, Power BI retrieves all information from the SQL database.
+- Maintain transactional integrity across parent-child inserts (`VendorEvaluation` → `VendorCriterionScore` → `Evidence`).
+- Execute staging/upsert routines to prevent record duplication on repeated pipeline executions.
+- Populate dimension tables (`Vendor`, `EvaluationCategory`, `EvaluationCriterion`, `ClientPersona`, `WeightProfile`, `CategoryWeight`).
 
 ### Input
 
-Scored vendor dataset.
+Final processed DataFrames.
 
 ### Output
 
-Analytics-ready relational database.
+Populated relational SQL database.
 
 ---
 
-# Configuration Externalization
+# ETL Module Architecture
 
-To keep the ETL pipeline reusable and maintainable, business rules are stored outside the Python code.
+```text
+etl/
+├── __init__.py
+├── extract.py      # Reads raw input files and research data
+├── clean.py        # Validates data types, duplicates, and constraints
+├── normalize.py    # Standardizes scores to the 1–5 scale
+├── score.py        # Formats criterion-level scores and handles N/A redistributions
+├── load.py         # Handles SQLAlchemy connections and batch loads
+└── main.py         # Pipeline orchestrator executing stages sequentially
 
-The following configurations are externalized:
-
-| Configuration       | Purpose                                     |
-| ------------------- | ------------------------------------------- |
-| Vendors             | Add or remove vendors without changing code |
-| Evaluation Criteria | Modify comparison criteria                  |
-| Criteria Weights    | Support different weighting strategies      |
-| Client Personas     | Enable persona-specific evaluations         |
-| Normalization Rules | Define score conversion mappings            |
-| Input File Paths    | Support different data sources              |
-
-This design allows new vendors, evaluation frameworks, or client scenarios to be introduced through configuration updates rather than code changes.
-
----
-
-# Proposed Project Structure
-
-```
-project/
-
-│
-├── config/
-│   ├── vendors.csv
-│   ├── criteria.csv
-│   ├── weights.csv
-│   └── personas.csv
-│
-├── data/
-│   ├── raw/
-│   ├── cleaned/
-│   └── processed/
-│
-├── etl/
-│   ├── extract.py
-│   ├── clean.py
-│   ├── normalize.py
-│   ├── score.py
-│   └── load.py
-│
-├── sql/
-│
-├── powerbi/
-│
-└── main.py
-```
-
-Each ETL module has a single responsibility, making the pipeline easier to test, maintain, and extend.
-
----
 
 # ETL Flow Summary
+| **Stage**           | **Input**                 | **Primary Operation**                                       | **Target SQL Entity**              |
+| ------------------- | ------------------------- | ----------------------------------------------------------- | ---------------------------------- |
+| **Extract**         | Raw vendor files (`.csv`) | Ingest raw research inputs                                  | N/A (In-memory)                    |
+| **Clean**           | Raw DataFrames            | Standardize schema, strip characters, validate foreign keys | N/A (In-memory)                    |
+| **Normalize**       | Clean DataFrames          | Verify 1–5 scoring scale and map confidence tiers           | N/A (In-memory)                    |
+| **Prepare Scoring** | Normalized DataFrames     | Re-normalize N/A criterion weights; format justifications   | `VendorCriterionScore`, `Evidence` |
+| **Load**            | Processed DataFrames      | Batch insert via SQLAlchemy                                 | All Database Tables                |
 
-| Stage     | Input                                | Processing                                  | Output                   |
-| --------- | ------------------------------------ | ------------------------------------------- | ------------------------ |
-| Extract   | Raw vendor data                      | Read external data sources                  | Raw DataFrame            |
-| Clean     | Raw DataFrame                        | Validate and standardize data               | Clean DataFrame          |
-| Normalize | Clean DataFrame                      | Convert values to a common scoring scale    | Normalized DataFrame     |
-| Score     | Normalized DataFrame + configuration | Apply weights and calculate vendor rankings | Scored DataFrame         |
-| Load      | Scored DataFrame                     | Store processed results in SQL              | Analytics-ready database |
-
----
 
 # Outcome
 
