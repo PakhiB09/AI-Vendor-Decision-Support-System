@@ -65,7 +65,7 @@ Disconnected dimension tables (`personas`, `persona_weights`) feed dynamic DAX c
 
 ## Dashboard Interface & Analytics View
 
-![Enterprise AI Vendor Dashboard Overview(outputs/dashboard_screenshots/complete_dashboard_overview.png)]
+![Enterprise AI Vendor Dashboard Overview](outputs/dashboard_screenshots/complete_dashboard_overview.png)
 
 The Power BI presentation layer uses a three-zone visual layout designed for instant executive clarity.
 
@@ -76,8 +76,8 @@ Dark SaaS navigation header containing client scenario selection, paired with an
 - Top pick
 - Active profile
 - Dynamic consulting rationale
-![Zone A Header(outputs/dashboard_screenshots/zone_A_1.png)]
-![Zone A Recommendation Banner(outputs/dashboard_screenshots/zone_A_2.png)]
+![Zone A Header](outputs/dashboard_screenshots/zone_A_1.png)
+![Zone A Recommendation Banner](outputs/dashboard_screenshots/zone_A_2.png)
 
 ### Zone B – Rank Leaderboard Table
 
@@ -87,12 +87,12 @@ Stack-ranked table featuring:
 - Rank
 - Weighted Score
 - Gap to Leader delta ($0.00$ to $-1.00$)
-![Zone B Leaderboard Table(outputs/dashboard_screenshots/zone_B.png)]
+![Zone B Leaderboard Table](outputs/dashboard_screenshots/zone_B.png)
 
 ### Zone C – 100% Stacked Bar Chart
 
 Visual breakdown displaying category score contributions normalized across all **5 capability pillars** using a tech-gradient color palette.
-![Zone C Category Breakdown Chart(outputs/dashboard_screenshots/zone_C.png)]
+![Zone C Category Breakdown Chart](outputs/dashboard_screenshots/zone_C.png)
 ---
 
 # Evaluated Vendors & Capability Pillars
