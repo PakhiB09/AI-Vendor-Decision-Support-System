@@ -20,7 +20,6 @@ This project transforms static vendor comparisons into an interactive, data-driv
 
 The system follows a decoupled, multi-layered data flow that isolates qualitative evidence collection from Python processing, SQL storage, DAX business logic, and visual presentation[cite: 1, 4, 8]:
 
-```text
 [Qualitative Research] ──► [Python ETL Pipeline] ──► [MySQL Store] ──► [Power BI Model] ──► [DAX Engine]
  (data/raw/*.csv)            (etl/*.py)             (vendor_db)        (Star Schema)      (Dynamic Ranks)
 
