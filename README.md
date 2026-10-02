@@ -65,7 +65,7 @@ Disconnected dimension tables (`personas`, `persona_weights`) feed dynamic DAX c
 
 ## Dashboard Interface & Analytics View
 
-![Enterprise AI Vendor Dashboard Overview](https://github.com/PakhiB09/AI-Vendor-Decision-Support-System/blob/main/outputs/dashboard_screenshots/complete_dashboard_overview.png)
+![Enterprise AI Vendor Dashboard Overview](https://github.com/PakhiB09/AI-Vendor-Decision-Support-System/blob/main/outputs/dashboard_screenshots/complete_dashboard_overview.png?raw=true)
 
 The Power BI presentation layer uses a three-zone visual layout designed for instant executive clarity.
 
